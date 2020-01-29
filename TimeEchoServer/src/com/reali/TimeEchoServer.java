@@ -1,5 +1,57 @@
 package com.reali;
 
-public class TimeEchoServer {
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.util.List;
+import java.util.Set;
 
+import com.reali.rep.TimeEchoRedisRepository;
+import com.reali.rep.TimeEchoRepository;
+import com.sun.net.httpserver.HttpServer;
+
+public class TimeEchoServer {
+	
+	private static final int PORT = 8001;
+
+	public static void main(String[] args) throws IOException {
+		TimeEchoRepository repository = new TimeEchoRedisRepository("localhost", 6379);
+		TimeMessageQueue queue = new TimeMessageQueue();
+		load(repository, queue);
+		
+		Thread workerThread = new Thread(new TimeEchoWorker(queue, repository));
+		workerThread.start();
+		
+		HttpServer server = HttpServer.create(new InetSocketAddress(PORT), 0);
+		System.out.println("server started at " + PORT);
+		server.createContext("/echoAtTime", new EchoAtTimeHandler(queue, repository));
+		server.setExecutor(null);
+		server.start();
+	}
+
+	public static void load(TimeEchoRepository repository, TimeMessageQueue queue) {
+		long now = System.currentTimeMillis();
+		Set<String> keys = repository.getAllKeys();
+		for (String key : keys) {
+			long ts = repository.getTimestampFor(key);
+			if (ts > now) {
+				queue.addTimeMessage(ts, repository.getMessagesFor(key));
+			} else if (ts > 0 && ts <= now) {
+				printMissedMessages(now, ts, repository.getMessagesFor(key));
+				repository.remove(ts);
+			}
+		}
+	}
+
+	private static void printMissedMessages(long now, long ts, List<String> messages) {
+		StringBuilder sb = new StringBuilder();
+		sb.append("Messages for timestamp ").append(ts).append(":");
+		sb.append(" (printed lately at ").append(now).append(" because the server was down!)");
+		System.out.println(sb.toString());
+		for (String message : messages) {
+			System.out.println(message);
+		}
+		System.out.println();
+		
+	}
+	
 }
