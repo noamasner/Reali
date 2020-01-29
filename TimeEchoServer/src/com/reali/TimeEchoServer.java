@@ -11,18 +11,22 @@ import com.sun.net.httpserver.HttpServer;
 
 public class TimeEchoServer {
 	
-	private static final int PORT = 8001;
+	private static int SERVER_PORT = -1;
+	private static String REDIS_HOST = null;
+	private static int REDIS_PORT = -1;
 
 	public static void main(String[] args) throws IOException {
-		TimeEchoRepository repository = new TimeEchoRedisRepository("localhost", 6379);
+		parseArgs(args);
+		
+		TimeEchoRepository repository = new TimeEchoRedisRepository(REDIS_HOST, REDIS_PORT);
 		TimeMessageQueue queue = new TimeMessageQueue();
 		load(repository, queue);
 		
 		Thread workerThread = new Thread(new TimeEchoWorker(queue, repository));
 		workerThread.start();
 		
-		HttpServer server = HttpServer.create(new InetSocketAddress(PORT), 0);
-		System.out.println("server started at " + PORT);
+		HttpServer server = HttpServer.create(new InetSocketAddress(SERVER_PORT), 0);
+		System.out.println("server started at " + SERVER_PORT);
 		server.createContext("/echoAtTime", new EchoAtTimeHandler(queue, repository));
 		server.setExecutor(null);
 		server.start();
@@ -51,7 +55,27 @@ public class TimeEchoServer {
 			System.out.println(message);
 		}
 		System.out.println();
-		
 	}
 	
+	private static void parseArgs(String[] args) {
+		if (args.length != 3) {
+			System.out.println("Usage: TimeEchoServer [server_port] [redis_host] [redis_port]");
+			System.exit(1);
+		}
+		SERVER_PORT = parseInt(args[0]);
+		REDIS_HOST = args[1];
+		REDIS_PORT = parseInt(args[2]);
+		if (SERVER_PORT < 0 || REDIS_PORT < 0) {
+			System.out.println("Usage: TimeEchoServer [server_port] [redis_host] [redis_port]");
+			System.exit(1);
+		}
+	}
+	
+	private static int parseInt(String value) {
+		try {
+			return Integer.parseInt(value);
+		} catch (NumberFormatException e) {
+			return -1;
+		}
+	}
 }

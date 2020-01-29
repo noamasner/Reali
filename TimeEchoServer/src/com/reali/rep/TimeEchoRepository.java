@@ -3,6 +3,7 @@
  */
 package com.reali.rep;
 
+import java.io.Closeable;
 import java.util.List;
 import java.util.Set;
 
@@ -10,7 +11,7 @@ import java.util.Set;
  * @author noama
  *
  */
-public interface TimeEchoRepository {
+public interface TimeEchoRepository extends Closeable {
 
 	public void add(long timestamp, String message);
 	public void remove(long timestamp);
