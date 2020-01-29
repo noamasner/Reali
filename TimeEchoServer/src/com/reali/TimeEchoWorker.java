@@ -3,10 +3,12 @@
  */
 package com.reali;
 
+import java.io.IOException;
 import java.util.List;
 
 import com.reali.data.TimeMessage;
 import com.reali.rep.TimeEchoRepository;
+import com.reali.rep.TimeEchoRepositoryConnection;
 
 /**
  * @author noama
@@ -24,10 +26,14 @@ public class TimeEchoWorker implements Runnable {
 
 	@Override
 	public void run() {
-		while (true) {
-			TimeMessage timeMessage = queue.getNextMessageInTime();
-			printTimeMessage(timeMessage);
-			repository.remove(timeMessage.getTimestamp());
+		try(TimeEchoRepositoryConnection repositoryConnection = repository.getConnection()) {
+			while (true) {
+				TimeMessage timeMessage = queue.getNextMessageInTime();
+				printTimeMessage(timeMessage);
+				repositoryConnection.remove(timeMessage.getTimestamp());
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
 		}
 	}
 

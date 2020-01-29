@@ -7,24 +7,25 @@ import java.util.Set;
 
 import com.reali.rep.TimeEchoRedisRepository;
 import com.reali.rep.TimeEchoRepository;
+import com.reali.rep.TimeEchoRepositoryConnection;
 import com.sun.net.httpserver.HttpServer;
 
 public class TimeEchoServer {
-	
+
 	private static int SERVER_PORT = -1;
 	private static String REDIS_HOST = null;
 	private static int REDIS_PORT = -1;
 
 	public static void main(String[] args) throws IOException {
 		parseArgs(args);
-		
+
 		TimeEchoRepository repository = new TimeEchoRedisRepository(REDIS_HOST, REDIS_PORT);
 		TimeMessageQueue queue = new TimeMessageQueue();
 		load(repository, queue);
-		
+
 		Thread workerThread = new Thread(new TimeEchoWorker(queue, repository));
 		workerThread.start();
-		
+
 		HttpServer server = HttpServer.create(new InetSocketAddress(SERVER_PORT), 0);
 		System.out.println("server started at " + SERVER_PORT);
 		server.createContext("/echoAtTime", new EchoAtTimeHandler(queue, repository));
@@ -33,16 +34,20 @@ public class TimeEchoServer {
 	}
 
 	public static void load(TimeEchoRepository repository, TimeMessageQueue queue) {
-		long now = System.currentTimeMillis();
-		Set<String> keys = repository.getAllKeys();
-		for (String key : keys) {
-			long ts = repository.getTimestampFor(key);
-			if (ts > now) {
-				queue.addTimeMessage(ts, repository.getMessagesFor(key));
-			} else if (ts > 0 && ts <= now) {
-				printMissedMessages(now, ts, repository.getMessagesFor(key));
-				repository.remove(ts);
+		try (TimeEchoRepositoryConnection connection = repository.getConnection()) {
+			long now = System.currentTimeMillis();
+			Set<String> keys = connection.getAllKeys();
+			for (String key : keys) {
+				long ts = connection.getTimestampFor(key);
+				if (ts > now) {
+					queue.addTimeMessage(ts, connection.getMessagesFor(key));
+				} else if (ts > 0 && ts <= now) {
+					printMissedMessages(now, ts, connection.getMessagesFor(key));
+					connection.remove(ts);
+				}
 			}
+		} catch (IOException e) {
+			e.printStackTrace();
 		}
 	}
 
@@ -56,7 +61,7 @@ public class TimeEchoServer {
 		}
 		System.out.println();
 	}
-	
+
 	private static void parseArgs(String[] args) {
 		if (args.length != 3) {
 			System.out.println("Usage: TimeEchoServer [server_port] [redis_host] [redis_port]");
@@ -70,7 +75,7 @@ public class TimeEchoServer {
 			System.exit(1);
 		}
 	}
-	
+
 	private static int parseInt(String value) {
 		try {
 			return Integer.parseInt(value);

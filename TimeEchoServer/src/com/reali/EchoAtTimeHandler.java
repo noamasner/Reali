@@ -8,6 +8,7 @@ import java.io.OutputStream;
 import java.net.URI;
 
 import com.reali.rep.TimeEchoRepository;
+import com.reali.rep.TimeEchoRepositoryConnection;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
@@ -81,10 +82,14 @@ public class EchoAtTimeHandler implements HttpHandler {
 			return;
 		}
 		
-		repository.add(ts, message);
-		queue.addTimeMessage(ts, message);
-		sendOK(exchange, "OK");
-		return;
+		try (TimeEchoRepositoryConnection connection = repository.getConnection()) {
+			connection.add(ts, message);
+			queue.addTimeMessage(ts, message);
+			sendOK(exchange, "OK");
+			return;
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 
 	private void sendError(HttpExchange exchange, String message) throws IOException {
